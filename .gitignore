@@ -1,0 +1,22 @@
+# Virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Data & model artifacts (large / regenerable, don't commit)
+data/*.csv
+models/*
+!models/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Env vars
+.env
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
