@@ -11,11 +11,11 @@ Built incrementally, day by day:
 
 - [x] **Day 1** — Dataset & EDA
 - [x] **Day 2** — Text preprocessing
-- [ ] Day 3 — Model fine-tuning
-- [ ] Day 4 — REST API
-- [ ] Day 5 — Frontend
-- [ ] Day 6 — Deployment
-- [ ] Day 7 — Polish, testing, docs
+- [x] **Day 3** — Baseline model + DistilBERT fine-tuning
+- [ ] Day 4 — Interpretability (Captum / attention attribution)
+- [ ] Day 5 — REST API
+- [ ] Day 6 — Frontend
+- [ ] Day 7 — Deployment, polish, docs
 
 ## Tech stack
 
@@ -97,3 +97,48 @@ python 02_preprocessing.py
 ```
 
 Saves cleaned text to `data/train_clean.csv` and `data/test_clean.csv`.
+
+## Day 3 — Baseline model + DistilBERT fine-tuning
+
+**Baseline** ([`src/baseline.py`](src/baseline.py),
+[`notebooks/03a_baseline.py`](notebooks/03a_baseline.py)): TF-IDF (unigrams +
+bigrams) + Logistic Regression. The point of a baseline isn't to be
+competitive — it's to establish how much of a transformer's performance is
+actually earned versus what a simple linear model over word frequencies
+already captures. Bigrams were included specifically so short negations like
+"not good" get captured as a feature, avoiding an artificially weak
+strawman.
+
+```bash
+cd notebooks
+python 03a_baseline.py
+```
+
+**Fine-tuning** ([`notebooks/03b_finetune_distilbert.py`](notebooks/03b_finetune_distilbert.py)):
+`distilbert-base-uncased` fine-tuned for 2 epochs on the IMDB train split.
+Meant to run on **Google Colab** with a free GPU — CPU fine-tuning of a
+transformer over 25k examples is impractically slow. Trained weights are
+saved to `models/distilbert-sentiment/` (gitignored; regenerate via Colab).
+
+**Comparison** ([`notebooks/03c_compare_models.py`](notebooks/03c_compare_models.py))
+runs both models on an identical held-out sample and reports results
+side by side:
+
+| Model | F1 |
+|---|---|
+| Baseline (TF-IDF + Logistic Regression) | 0.874 |
+| DistilBERT (fine-tuned) | 0.917 |
+
+DistilBERT improves F1 by +4.3 points (+5.0% relative) over the baseline.
+The gap is most visible on examples requiring contextual/tonal
+understanding — negation, mixed sentiment, sarcasm — rather than simple
+keyword matching, which the linear baseline handles reasonably well on its
+own already. The set of examples both models get wrong (~4% of test data)
+are genuinely ambiguous cases (backhanded compliments, niche context) and
+are the starting point for Day 4's interpretability analysis.
+
+Note: CPU inference for DistilBERT over the full 25k-review test set proved
+too slow to be practical locally (no GPU on this machine); comparison runs
+on a random 3,000-review sample, which is large enough for stable metrics
+and closely matches the full-test-set numbers Colab reported during
+training.
