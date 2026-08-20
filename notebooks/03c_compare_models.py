@@ -1,12 +1,9 @@
 # %% [markdown]
-# # Day 3c — Compare Baseline vs. Fine-Tuned DistilBERT
+# # Compare: baseline vs. fine-tuned DistilBERT
 #
-# DistilBERT was fine-tuned on Colab (see `03b_finetune_distilbert.py`) and
-# its weights were downloaded into `models/distilbert-sentiment/`. This
-# notebook runs both models on the full test set side by side so we have
-# one clear comparison, rather than trusting Colab's printed metrics alone
-# (those were computed during training; here we verify independently on
-# this machine, using the exact same evaluation code for both models).
+# Runs both models on the same held-out data so the comparison is
+# apples-to-apples, rather than trusting Colab's training-time metrics
+# alone.
 
 # %%
 import sys
@@ -30,17 +27,11 @@ from transformers import DistilBertForSequenceClassification, DistilBertTokenize
 
 from baseline import load_baseline
 
-# %% [markdown]
-# ## 1. Load test data and both models
-
 # %%
 test_df = pd.read_csv("../data/test_clean.csv")
 
-# DistilBERT inference on CPU (no GPU on this machine) is slow at full
-# scale — batch matrix multiplies over 25k reviews take a long time without
-# GPU parallelism. We evaluate on a random 3,000-review sample instead,
-# which is large enough for stable metrics (well within the margin of error
-# of Colab's full-test-set numbers) while running in a few minutes on CPU.
+# Full-test-set CPU inference (no GPU here) is too slow to be practical.
+# 3,000 reviews is large enough for stable metrics and runs in a few minutes.
 test_df = test_df.sample(3000, random_state=42).reset_index(drop=True)
 print("Test sample:", test_df.shape)
 
@@ -54,18 +45,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(DEVICE)
 print("Running DistilBERT inference on:", DEVICE)
 
-# %% [markdown]
-# ## 2. Baseline predictions
-
 # %%
 X_test = vectorizer.transform(test_df["text"])
 baseline_preds = baseline_clf.predict(X_test)
-
-# %% [markdown]
-# ## 3. DistilBERT predictions
-#
-# Batched for speed — running all 25k examples one at a time would be slow
-# even on CPU.
 
 # %%
 def predict_distilbert(texts, batch_size=32):
@@ -84,9 +66,6 @@ def predict_distilbert(texts, batch_size=32):
 
 distilbert_preds = predict_distilbert(test_df["text"].tolist())
 
-# %% [markdown]
-# ## 4. Side-by-side comparison
-
 # %%
 print("=" * 60)
 print("BASELINE: TF-IDF + Logistic Regression")
@@ -101,9 +80,6 @@ print(classification_report(test_df["label"], distilbert_preds, target_names=["N
 baseline_f1 = f1_score(test_df["label"], baseline_preds)
 distilbert_f1 = f1_score(test_df["label"], distilbert_preds)
 print(f"F1 improvement: {distilbert_f1 - baseline_f1:+.4f} ({(distilbert_f1 - baseline_f1) / baseline_f1 * 100:+.1f}%)")
-
-# %% [markdown]
-# ## 5. Confusion matrices side by side
 
 # %%
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
@@ -125,11 +101,10 @@ plt.savefig("../data/model_comparison_confusion_matrices.png", dpi=120)
 print("Saved data/model_comparison_confusion_matrices.png")
 
 # %% [markdown]
-# ## 6. Cases where DistilBERT got it right but the baseline didn't
+# ## Where DistilBERT got it right and the baseline didn't
 #
-# These are the most interesting examples for Day 4's interpretability
-# work — they show what the extra contextual understanding actually buys
-# us in practice, beyond just a higher aggregate score.
+# The interesting cases — what does the extra contextual understanding
+# actually buy in practice, beyond a higher aggregate score.
 
 # %%
 test_df["baseline_pred"] = baseline_preds
@@ -147,10 +122,9 @@ for _, row in distilbert_only_correct.sample(3, random_state=1).iterrows():
     print(row["text"][:300], "...\n")
 
 # %% [markdown]
-# ## 7. Cases both models get wrong
+# ## Cases both models get wrong
 #
-# Likely the genuinely hard/ambiguous examples — good candidates for Day
-# 4's failure-mode analysis.
+# Likely the genuinely hard/ambiguous examples.
 
 # %%
 both_wrong = test_df[
@@ -164,9 +138,6 @@ for _, row in both_wrong.sample(3, random_state=1).iterrows():
     print(f"True label: {true_label}")
     print(row["text"][:300], "...\n")
 
-# %% [markdown]
-# ## 8. Save comparison results for the README / report
-
 # %%
 summary = pd.DataFrame(
     {
@@ -177,12 +148,3 @@ summary = pd.DataFrame(
 summary.to_csv("../data/model_comparison_summary.csv", index=False)
 print(summary)
 print("\nSaved data/model_comparison_summary.csv")
-
-# %% [markdown]
-# ## Summary
-#
-# DistilBERT outperforms the TF-IDF + Logistic Regression baseline, and the
-# gap is most visible on examples requiring contextual understanding
-# (negation, mixed sentiment, sarcasm) rather than simple keyword matching.
-# The "both models wrong" set is a useful starting point for Day 4's deeper
-# interpretability work — these are the genuinely hard cases.

@@ -1,13 +1,11 @@
 # %% [markdown]
-# # Day 3a — Baseline: TF-IDF + Logistic Regression
+# # Baseline: TF-IDF + Logistic Regression
 #
-# Before trusting a fine-tuned transformer's accuracy number, we want a
-# reference point: how well does a simple, fast, linear model do on the
-# same task? This tells us how much of DistilBERT's performance is the
-# transformer actually earning its complexity, versus how much a bag-of-words
-# model would already capture (sentiment classification has a lot of
-# surface-level lexical signal — words like "terrible" or "brilliant" go a
-# long way even without deep contextual understanding).
+# Before trusting DistilBERT's accuracy number, it's worth having a
+# reference point — how well does a simple, fast linear model do on the
+# same task? Sentiment has a lot of surface-level lexical signal ("terrible",
+# "brilliant"), so a bag-of-words model should already do reasonably well.
+# This tells us how much DistilBERT is actually earning over that.
 
 # %%
 import sys
@@ -28,28 +26,19 @@ from sklearn.metrics import (
 
 from baseline import save_baseline, train_baseline
 
-# %% [markdown]
-# ## 1. Load cleaned data from Day 2
-
 # %%
 train_df = pd.read_csv("../data/train_clean.csv")
 test_df = pd.read_csv("../data/test_clean.csv")
 print("Train:", train_df.shape, " Test:", test_df.shape)
 
 # %% [markdown]
-# ## 2. Train TF-IDF + Logistic Regression
-#
 # TF-IDF converts each review into a sparse vector of word/bigram
-# importance scores. Logistic Regression then learns a linear decision
-# boundary over those features. This whole pipeline trains in under a
-# minute on CPU — no GPU needed, unlike DistilBERT fine-tuning.
+# importance scores; logistic regression learns a linear boundary over
+# those features. Trains in under a minute on CPU.
 
 # %%
 vectorizer, clf = train_baseline(train_df["text"], train_df["label"])
 print("Baseline trained. Vocabulary size:", len(vectorizer.vocabulary_))
-
-# %% [markdown]
-# ## 3. Evaluate on the test set
 
 # %%
 X_test = vectorizer.transform(test_df["text"])
@@ -66,11 +55,10 @@ plt.tight_layout()
 plt.savefig("../data/baseline_confusion_matrix.png", dpi=120)
 
 # %% [markdown]
-# ## 4. A few misclassified examples
+# ## Misclassified examples
 #
-# Worth a quick look now — these are exactly the kind of cases (negation,
-# sarcasm, mixed sentiment) that Day 4's interpretability work will dig
-# into more deeply for the fine-tuned model.
+# Quick look at what trips it up — negation, sarcasm, mixed sentiment are
+# the usual suspects for a bag-of-words model.
 
 # %%
 test_df["pred"] = preds
@@ -83,19 +71,6 @@ for _, row in wrong.sample(3, random_state=1).iterrows():
     print(f"True: {true_label} | Predicted: {pred_label}")
     print(row["text"][:250], "...\n")
 
-# %% [markdown]
-# ## 5. Save the baseline model
-#
-# Saved so Day 4/7 evaluation and comparison scripts can load it without
-# retraining.
-
 # %%
 save_baseline(vectorizer, clf)
 print("Saved models/baseline_vectorizer.joblib and models/baseline_logreg.joblib")
-
-# %% [markdown]
-# ## Summary
-#
-# This baseline number is the bar DistilBERT needs to clear to justify its
-# extra complexity and compute cost. See `data/baseline_confusion_matrix.png`
-# for the error breakdown. Next: fine-tune DistilBERT on Colab and compare.

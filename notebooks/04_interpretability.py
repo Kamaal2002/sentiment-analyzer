@@ -1,28 +1,22 @@
 # %% [markdown]
-# # Day 4 — Interpretability: Why does the model predict what it predicts?
+# # Interpretability: why does the model predict what it predicts?
 #
-# So far we know DistilBERT beats a TF-IDF baseline by 5% relative F1, but
-# that number alone doesn't tell us *why* — is it genuinely picking up on
-# context and tone, or just memorizing stronger keyword correlations from a
-# bigger vocabulary? This notebook uses Captum's **Layer Integrated
-# Gradients** to attribute each prediction back to individual input tokens,
-# so we can see exactly which words push the model toward "positive" or
+# DistilBERT beats the TF-IDF baseline by 5% relative F1, but that number
+# alone doesn't say *why* — genuine use of context and tone, or just a
+# bigger vocabulary of keyword correlations? Captum's **Layer Integrated
+# Gradients** attributes each prediction back to individual input tokens,
+# so we can see which words actually push the model toward "positive" or
 # "negative."
 #
-# Integrated Gradients works by comparing the model's output for the real
-# input against a neutral "baseline" input (here, an all-[PAD]-tokens
-# sequence), and attributing the difference back to each token based on
-# how much moving from baseline to real input changed the prediction. It's
-# a longstanding, well-established attribution method — not something
-# specific to this project — so what we get out of it is defensible, not
-# hand-wavy.
+# It works by comparing the model's output on the real input against a
+# neutral baseline input (here, all-[PAD] tokens) and attributing the
+# difference back to each token based on how much moving from baseline to
+# real input changed the prediction — a standard, well-established method,
+# not something specific to this project.
 #
-# We specifically care about three cases:
-# 1. Confident correct predictions — sanity check that attributions make sense
-# 2. DistilBERT-correct / baseline-wrong (from Day 3) — what extra signal
-#    does the transformer actually use?
-# 3. Both-models-wrong (from Day 3) — "right for the wrong reasons" or
-#    genuinely hard cases?
+# Three cases worth checking: confident correct predictions (sanity check),
+# DistilBERT-correct/baseline-wrong (what extra signal is it using?), and
+# both-models-wrong ("right for the wrong reasons" or genuinely hard?).
 
 # %%
 import sys
@@ -40,9 +34,6 @@ from transformers import DistilBertForSequenceClassification, DistilBertTokenize
 
 DEVICE = "cpu"  # interpretability runs on single examples; CPU is fine here
 
-# %% [markdown]
-# ## 1. Load the fine-tuned model
-
 # %%
 model = DistilBertForSequenceClassification.from_pretrained("../models/distilbert-sentiment")
 tokenizer = DistilBertTokenizerFast.from_pretrained("../models/distilbert-sentiment")
@@ -52,12 +43,9 @@ model.eval()
 LABELS = {0: "Negative", 1: "Positive"}
 
 # %% [markdown]
-# ## 2. Set up Layer Integrated Gradients
-#
-# We attribute with respect to the model's input embedding layer — this is
-# the standard setup for attributing transformer predictions back to
-# tokens, since it's the layer where individual tokens still correspond
-# 1:1 to positions before being mixed together by attention.
+# Attributing with respect to the input embedding layer is the standard
+# setup for transformer attribution — it's where tokens still correspond
+# 1:1 to positions, before attention mixes them together.
 
 
 # %%
@@ -113,11 +101,11 @@ def print_attribution(text, target_class=None):
 
 
 # %% [markdown]
-# ## 3. Sanity check: clear-cut examples
+# ## Sanity check: clear-cut examples
 #
-# We expect strong positive attribution on obviously positive words and
-# vice versa. If this doesn't hold, something is wrong with the attribution
-# setup before we trust it on harder cases.
+# Should see strong positive attribution on obviously positive words and
+# vice versa — if not, something's wrong with the setup before trusting it
+# on harder cases.
 
 # %%
 print_attribution("This movie was absolutely fantastic, the acting was incredible.")
@@ -126,13 +114,11 @@ print_attribution("This movie was absolutely fantastic, the acting was incredibl
 print_attribution("Terrible film, a complete waste of time.")
 
 # %% [markdown]
-# ## 4. Cases where DistilBERT succeeded but the baseline failed
+# ## Cases where DistilBERT succeeded but the baseline failed
 #
-# These are pulled from Day 3's comparison — examples the linear baseline
-# got wrong but DistilBERT got right. If DistilBERT is genuinely using
-# context (not just a bigger vocabulary of keywords), the attributions here
-# should highlight negation, contrast, or tone rather than isolated
-# sentiment words.
+# Pulled from the earlier model comparison. If DistilBERT is genuinely using
+# context and not just a bigger keyword vocabulary, attributions here should
+# highlight negation, contrast, or tone rather than isolated sentiment words.
 
 # %%
 distilbert_wins_examples = [
@@ -149,14 +135,13 @@ for text in distilbert_wins_examples:
     print("\n" + "-" * 70 + "\n")
 
 # %% [markdown]
-# ## 5. "Right for the wrong reasons" check
+# ## "Right for the wrong reasons" check
 #
 # A model can get the right label while attending to something irrelevant
-# (an actor's name, a genre keyword) rather than actual sentiment language.
-# We check a batch of correct high-confidence predictions and flag any
-# where the top-attributed tokens aren't recognizable sentiment words —
-# that's a real failure mode even when the final label is correct, and
-# worth being honest about in the writeup.
+# (an actor's name, a genre keyword) instead of actual sentiment language.
+# Checking a batch of correct high-confidence predictions for cases where
+# the top-attributed tokens aren't recognizable sentiment words — a real
+# failure mode even when the final label is correct.
 
 # %%
 test_df = pd.read_csv("../data/test_clean.csv").sample(20, random_state=7).reset_index(drop=True)
@@ -170,12 +155,12 @@ for _, row in test_df.iterrows():
     print(f"Pred: {LABELS[pred_class]} ({conf:.2f})  Top tokens: {top_tokens}")
 
 # %% [markdown]
-# ## 6. Both models wrong: genuinely hard cases
+# ## Both models wrong: genuinely hard cases
 #
-# From Day 3 — examples both the baseline and DistilBERT misclassified.
-# Attribution here tells us whether the model was at least "reasoning"
-# sensibly and got unlucky (e.g. sarcasm it couldn't detect), versus
-# latching onto something spurious.
+# Examples both the baseline and DistilBERT misclassified. Attribution
+# tells us whether the model was at least "reasoning" sensibly and got
+# unlucky (e.g. sarcasm it couldn't detect), versus latching onto something
+# spurious.
 
 # %%
 both_wrong_examples = [
@@ -194,11 +179,11 @@ for text, true_label in both_wrong_examples:
     print("\n" + "-" * 70 + "\n")
 
 # %% [markdown]
-# ## 7. Save example attributions
+# ## Save example attributions
 #
-# Saved as JSON so the same explain() output format can later be reused by
-# the Flask API (Day 5) to serve token-level attributions alongside a
-# prediction, and by the README for a concrete before/after example.
+# Saved as JSON so the same explain() output format can be reused by the
+# Flask API to serve token-level attributions alongside a prediction, and
+# by the README for a concrete before/after example.
 
 # %%
 import json
@@ -225,21 +210,3 @@ with open("../data/interpretability_examples.json", "w") as f:
     json.dump(saved, f, indent=2)
 
 print("Saved data/interpretability_examples.json")
-
-# %% [markdown]
-# ## Summary
-#
-# - Attribution on clear-cut examples confirms Layer Integrated Gradients
-#   is picking up sensible sentiment signal (strong positive/negative
-#   words dominate, as expected)
-# - On DistilBERT-wins-baseline-loses cases, attributions concentrate on
-#   contrastive/tonal phrasing rather than isolated keywords — evidence
-#   the transformer really is using context, not just a bigger keyword
-#   vocabulary
-# - A handful of high-confidence correct predictions attribute to
-#   incidental tokens rather than clear sentiment words — a real, worth
-#   -disclosing limitation, not just a strength story
-# - On the hardest cases (both models wrong), attributions show the model
-#   picking up early negative-sounding phrasing and failing to track the
-#   sarcastic reversal later in the review — a concrete, explainable
-#   failure mode rather than a mysterious one

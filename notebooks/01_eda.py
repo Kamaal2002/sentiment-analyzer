@@ -1,9 +1,8 @@
 # %% [markdown]
-# # Day 1 — Dataset & Exploratory Data Analysis
+# # EDA: IMDB movie reviews
 #
-# Goal: load the IMDB movie review dataset, understand its shape and balance,
-# look at review length distributions, and save clean train/test CSVs that
-# later steps (preprocessing, fine-tuning) will build on.
+# Loading the dataset, checking class balance, and looking at review length
+# before deciding how to tokenize later on.
 
 # %%
 import os
@@ -15,22 +14,14 @@ from datasets import load_dataset
 
 sns.set_theme(style="whitegrid")
 
-# %% [markdown]
-# ## 1. Load the dataset
-#
-# We use the `datasets` library from HuggingFace, which downloads and caches
-# IMDB automatically (50,000 movie reviews, labeled positive/negative).
-# It's the standard benchmark dataset for binary sentiment classification —
-# well known, cleanly balanced, and small enough to iterate on quickly.
-
 # %%
 raw = load_dataset("imdb")
 print(raw)
 
 # %% [markdown]
-# `raw` has `train` (25k), `test` (25k), and `unsupervised` (50k, unlabeled —
-# we won't use that split). Each example is a dict with `text` and `label`
-# (0 = negative, 1 = positive).
+# `train` and `test` are 25k reviews each; `unsupervised` is 50k unlabeled
+# reviews we're not using. Each example is `text` + `label` (0 = negative,
+# 1 = positive).
 
 # %%
 train_df = raw["train"].to_pandas()
@@ -40,11 +31,7 @@ print("Train shape:", train_df.shape)
 print("Test shape:", test_df.shape)
 
 # %% [markdown]
-# ## 2. Class balance
-#
-# Before training anything, we check whether positive/negative labels are
-# roughly balanced. An imbalanced dataset would need extra handling (class
-# weights, resampling) or accuracy alone would be a misleading metric.
+# ## Class balance
 
 # %%
 print("Train label counts:")
@@ -63,11 +50,10 @@ plt.savefig("../data/class_balance.png", dpi=120)
 plt.show()
 
 # %% [markdown]
-# ## 3. Sample reviews
+# Balanced 50/50 in both splits, so accuracy is a fine metric here — no need
+# for class weighting or resampling.
 #
-# Reading a few raw examples helps you understand what the model will
-# actually see — HTML artifacts like `<br />` line breaks are common in this
-# dataset and worth knowing about now (we'll clean them up on Day 2).
+# ## A few raw examples
 
 # %%
 for i in range(3):
@@ -76,11 +62,10 @@ for i in range(3):
     print(train_df.iloc[i]["text"][:300], "...\n")
 
 # %% [markdown]
-# ## 4. Review length / word count distribution
+# Note the `<br />` tags — HTML line breaks left over from scraping. Worth
+# cleaning up before training.
 #
-# Understanding review length matters directly for Day 3: DistilBERT has a
-# max input length (typically 512 tokens), so we need to know how many
-# reviews would get truncated, and pick a sensible `max_length` for tokenization.
+# ## Review length
 
 # %%
 train_df["word_count"] = train_df["text"].str.split().str.len()
@@ -102,19 +87,16 @@ plt.savefig("../data/word_count_distribution.png", dpi=120)
 plt.show()
 
 # %%
-# How many reviews exceed common truncation thresholds?
 for threshold in [128, 256, 512]:
     pct = (train_df["word_count"] > threshold).mean() * 100
     print(f"Reviews over {threshold} words: {pct:.1f}%")
 
 # %% [markdown]
-# ## 5. Save cleaned train/test splits
+# DistilBERT caps out at 512 tokens, so this tells us roughly how much
+# truncation to expect at different `max_length` settings — useful going
+# into tokenization.
 #
-# We keep this "clean" step minimal on Day 1 — just the raw text and label,
-# with the helper `word_count` column dropped. Real text cleaning
-# (lowercasing, HTML stripping, tokenization) is Day 2's job. Splitting and
-# saving now gives every later script (preprocessing, training, API) a
-# single consistent source of truth to read from.
+# ## Save splits
 
 # %%
 os.makedirs("../data", exist_ok=True)
@@ -128,11 +110,3 @@ test_out.to_csv("../data/test.csv", index=False)
 print("Saved:")
 print(" data/train.csv ->", train_out.shape)
 print(" data/test.csv  ->", test_out.shape)
-
-# %% [markdown]
-# ## Summary
-#
-# - Dataset: IMDB, 25k train / 25k test, perfectly balanced (50/50 pos/neg)
-# - Reviews range widely in length; a meaningful fraction exceed 256 words,
-#   which will inform the `max_length` we choose for DistilBERT tokenization
-# - Saved clean `text`/`label` CSVs to `data/` for the next steps
