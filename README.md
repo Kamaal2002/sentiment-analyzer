@@ -12,7 +12,7 @@ Built incrementally, day by day:
 - [x] **Day 1** — Dataset & EDA
 - [x] **Day 2** — Text preprocessing
 - [x] **Day 3** — Baseline model + DistilBERT fine-tuning
-- [ ] Day 4 — Interpretability (Captum / attention attribution)
+- [x] **Day 4** — Interpretability (Captum integrated gradients)
 - [ ] Day 5 — REST API
 - [ ] Day 6 — Frontend
 - [ ] Day 7 — Deployment, polish, docs
@@ -142,3 +142,49 @@ too slow to be practical locally (no GPU on this machine); comparison runs
 on a random 3,000-review sample, which is large enough for stable metrics
 and closely matches the full-test-set numbers Colab reported during
 training.
+
+## Day 4 — Interpretability
+
+A model's F1 score doesn't say *why* it makes a given prediction. This step
+uses [Captum](https://captum.ai/)'s **Layer Integrated Gradients** to
+attribute each prediction back to individual input tokens — a
+well-established attribution method, not something ad hoc — so we can see
+which words actually pushed the model toward "positive" or "negative."
+Implementation: [`notebooks/04_interpretability.py`](notebooks/04_interpretability.py).
+
+**Sanity check.** On unambiguous examples, attribution concentrates
+correctly on strong sentiment words (e.g. "fantastic" +0.77, "incredible"
++0.58 on a clearly positive review) — confirming the method works before
+trusting it on harder cases.
+
+**Where DistilBERT's context understanding actually shows up.** On a review
+the TF-IDF baseline misclassified — *"...it has totally ruined one of the
+best novels ever written"* (true label: negative) — DistilBERT attributes
+overwhelmingly to **"ruined" (+0.83)**, while **"best" pulls slightly
+negative (-0.37) in context**, correctly recognizing "best novels ever
+written" as describing what was ruined, not praise for the film. A
+bag-of-words model has no mechanism to make that distinction; this is
+concrete evidence the transformer is using context, not just a larger
+keyword vocabulary.
+
+**An honest limitation: "right for the wrong reasons."** Checking
+high-confidence *correct* predictions for what they actually attribute to
+surfaced several cases where the top tokens are subword fragments or
+unrelated words (e.g. `['##sh', 'footage', 'up']`, `['today', 'stellar',
+'bus']`) rather than recognizable sentiment language. The label was right;
+the reasoning wasn't obviously sound. Included here deliberately — an
+interpretability section that only reports flattering findings isn't a
+credible one.
+
+**A concrete, explainable failure mode.** On one of Day 3's
+both-models-wrong examples — *"Sometimes a movie is so bad it's kind of
+good... the acting also was stilted and forced... who IMO did an excellent
+job"* (true label: positive) — the model fixates on early negative-coded
+words ("bad," "stilted," "forced") and never recovers from the sarcastic
+setup, missing "excellent" at the end entirely. Rather than an opaque
+mistake, this is a legible, specific breakdown: the model isn't tracking a
+sentiment reversal across a long span.
+
+Example attributions are saved to `data/interpretability_examples.json`
+(token-level scores + predictions) for reuse in the Day 5 API and Day 6
+frontend's word-highlighting feature.

@@ -11,3 +11,4 @@ python-dotenv==1.0.1
 matplotlib==3.9.2
 seaborn==0.13.2
 jupyter==1.1.1
+captum==0.7.0
